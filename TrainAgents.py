@@ -10,34 +10,40 @@ from configparser import ConfigParser
 from datetime import datetime
 import tensorflow as tf
 
-os.environ["RL_PATH"] = "/Users/ankitgupta/Documents/git/anks/Books/ReinforcementLearning/DeepQLearning"
-pref = os.environ["RL_PATH"]
+
+# get the relative path
+fullpath                = os.path.realpath(__file__)
+pref                    = os.path.split(fullpath)[0]
+
+os.environ["RL_PATH"]   = pref
+
+#os.environ["RL_PATH"] = "/Users/ankitgupta/Documents/git/anks/Books/ReinforcementLearning/DeepQLearning"
+#pref = os.environ["RL_PATH"]
 
 if f'{pref}/RLLibrary' not in sys.path:
     sys.path.append(f'{pref}/RLLibrary')
 
 
-# importing personal library
+# importing custom libraries
 from ActionSelection import ActionExploration
 from ConfigReader import Config
 from RLAgents import QLearningAgent, FittedQAgent, DQN, DoubleDQN
-
+import utils as RLUtils
 
 
 # Run the model
-env = gym.make("FrozenLake-v0")
-configFile = "/Users/ankitgupta/Documents/git/anks/Books/ReinforcementLearning/DeepQLearning/Configs.ini"
-
-savePath = os.path.join(os.environ["RL_PATH"], "models" )
-_time = datetime.now().strftime("%Y%m%d%H%M")
+env         = gym.make("FrozenLake-v0")
+configFile  = os.path.join(pref, "Configs.ini" )
+savePath    = os.path.join(os.environ["RL_PATH"], "models" )
+_time       = datetime.now().strftime("%Y%m%d%H%M")
 
 
 #FQAgent         = FittedQAgent(env, configFile)
 #QLAgent         = QLearningAgent(env, configFile)
 #DQNAgent        = DQN(env = env, configFile = configFile, NetworkShape = [32,32,16])
 #DQNAgent        = DQN(env = env, configFile = configFile, NetworkShape = [16])
-DoubleDQNAgent  = DoubleDQN(env = env, configFile = configFile, NetworkShape = [16])
-
+#DoubleDQNAgent  = DoubleDQN(env = env, configFile = configFile, NetworkShape = [16])
+DoubleDQNAgent  = DoubleDQN(env = env, configFile = configFile,  NetworkShape = [16])
 
 #Agent = FQAgent
 #Agent = QLAgent
@@ -104,6 +110,7 @@ for _thisepisode in tqdm(range(Agent.NbEpisodesTrain)):
 
 
 # save model & save config
+print(f"Model & config save path: {Agent.path}") 
 Agent.Qmodel.save(name = f"model_{Agent.Name}_{_time}.h5", path = savePath)
 Agent.saveConfig(filename = f"config_{Agent.Name}_{_time}.json", savePath = savePath)
 

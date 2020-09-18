@@ -23,24 +23,35 @@ from tensorflow.keras.callbacks import History
 # 2. Fitted Q learning - Simple neural based
 # 3. Deep Q Network
 # 4. Double DQN
-# 5. Dueling DQN
-# 
-# 
+# 5. Dueling DQN -  TODO
 
 
-os.environ["RL_PATH"] = "/Users/ankitgupta/Documents/git/anks/Books/ReinforcementLearning/DeepQLearning"
-pref = os.environ["RL_PATH"]
+try: 
+    pref = os.environ["RL_PATH"]
+except KeyError:
 
+    # get the relative path
+    fullpath = os.path.realpath(__file__)
+    pref     = os.path.split(fullpath)[0]
+
+
+#os.environ["RL_PATH"] = "/Users/ankitgupta/Documents/git/anks/Books/ReinforcementLearning/DeepQLearning"
+#pref = os.environ["RL_PATH"]
+"""
 if f'{pref}/RLLibrary' not in sys.path:
     sys.path.append(f'{pref}/RLLibrary')
+"""
 
-# importing personal library
+
+# importing custom libraries
+
 from ActionSelection import ActionExploration
 from ConfigReader import Config
 from NetworkModels import TabularModel, BaselineModel, DeepNeuralModel
 from Visualizations import QLPerformance, NFQPerformance
 from utils import get_val, convertStringtoBoolean, getOneHotrepresentation
 from Callbacks import ModifiedTensorBoardCallback, GradCallBack
+
 
 # All classes are based on OpenAI environments
 class QAgentBase(ABC):
@@ -78,7 +89,7 @@ class QLearningAgent(QAgentBase):
     # This is a tabular method
     # Limited state action space
 
-    def __init__(self, env, configFile, **kwargs):
+    def __init__(self, env, configFile,  **kwargs):
 
         self.Name   = "QLEARNING"
         self.env    = env
@@ -130,6 +141,10 @@ class QLearningAgent(QAgentBase):
         # save formats
         self.configsaveFormat       = get_val(self.config, tag = "CONFIG_FORMAT", default_value= "json")
 
+        self.path                   = get_val(self.config, tag = "PATH", default_value="models")
+
+        # Need to append the path to relative path
+        self.path                   = os.path.join(pref,self.path)
 
 
 
@@ -188,16 +203,17 @@ class QLearningAgent(QAgentBase):
 
          
     
-    def saveConfig(self, filename, savePath):
+    def saveConfig(self, filename, savePath = ""):
 
         # save the config in a pickle
+        savePath = self.path if savePath else savePath
         self.config.save(filename, savePath, format = self.configsaveFormat.upper())
 
 
 
 class FittedQAgent(QAgentBase):
 
-    def __init__(self, env, configFile, model = None,  **kwargs):
+    def __init__(self, env, configFile,  model = None,  **kwargs):
 
         self.Name   = "NFQ"
         self.env    = env
@@ -280,10 +296,15 @@ class FittedQAgent(QAgentBase):
         # save formats
         self.configsaveFormat       = get_val(self.config, tag = "CONFIG_FORMAT", default_value= "json")
 
+        self.path                   = get_val(self.config, tag = "PATH", default_value="models")
+
+        # Need to append the path to relative path
+        self.path                   = os.path.join(pref,self.path)
+
 
 
         
-    def getAction(self, state, currentEpisodeNb, mode = "TRAIN"):
+    def getAction(self, state, mode = "TRAIN"):
 
         # get one hot representation of state
         _state = getOneHotrepresentation(state, num_classes=self.env.observation_space.n)
@@ -372,9 +393,9 @@ class FittedQAgent(QAgentBase):
         self.EpisodicRewards[mode].append(episodeReward)
         self.EpisodicSteps[mode].append(episodeSteps)
 
-    def saveConfig(self, filename, savePath):
+    def saveConfig(self, filename, savePath = ""):
 
-        # save the config in a pickle
+        savePath = self.path if savePath else savePath        
         self.config.save(filename, savePath, format = self.configsaveFormat)
 
 
@@ -410,7 +431,7 @@ class FittedQAgent(QAgentBase):
 
 class DQN(QAgentBase):
 
-    def __init__(self, env, configFile, model = None, **kwargs):
+    def __init__(self, env, configFile,  model = None, **kwargs):
         
         self.Name   = "DQN"
         self.env    = env
@@ -508,11 +529,15 @@ class DQN(QAgentBase):
 
         # save formats
         self.configsaveFormat       = get_val(self.config, tag = "CONFIG_FORMAT", default_value= "json")
+        self.path                   = get_val(self.config, tag = "PATH", default_value="models")
+
+        # Need to append the path to relative path
+        self.path                   = os.path.join(pref,self.path)
 
 
-    def saveConfig(self, filename, savePath):
+    def saveConfig(self, filename, savePath = ""):
 
-        # save the config in a pickle
+        savePath = self.path if savePath else savePath        
         self.config.save(filename, savePath, format = self.configsaveFormat)
 
 
@@ -656,7 +681,7 @@ class DQN(QAgentBase):
 
 class DoubleDQN(QAgentBase):
 
-    def __init__(self, env, configFile, model = None, **kwargs):
+    def __init__(self, env, configFile,  model = None, **kwargs):
         
         self.Name   = "DOUBLEDQN"
 
@@ -756,10 +781,15 @@ class DoubleDQN(QAgentBase):
         # save formats
         self.configsaveFormat       = get_val(self.config, tag = "CONFIG_FORMAT", default_value= "json")
 
+        self.path                   = get_val(self.config, tag = "PATH", default_value="models")
 
-    def saveConfig(self, filename, savePath):
+        # Need to append the path to relative path
+        self.path                   = os.path.join(pref,self.path)
 
-        # save the config in a pickle
+
+    def saveConfig(self, filename, savePath = ""):
+
+        savePath = self.path if savePath else savePath        
         self.config.save(filename, savePath, format = self.configsaveFormat)
 
 
