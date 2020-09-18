@@ -13,7 +13,7 @@ import tensorflow as tf
 
 from abc import ABC, abstractclassmethod
 
-prefpath = os.environ["RL_PATH"]
+pref = os.environ["RL_PATH"]
 
 from Callbacks import ModifiedTensorBoardCallback, GradCallBack
 from utils import convertStringtoBoolean, get_val
@@ -71,7 +71,11 @@ class TabularModel():
     def __readConfig(self, config):
         self.batchSize          = int(get_val(config, tag = "TRAIN_BATCH_SIZE", default_value= 32))
         self.modelsaveFormat    = get_val(config, tag = "MODEL_FORMAT", default_value="h5")
-        self.AgentName          = get_val(config, tag = "NAME", default_value="NFQ")
+        self.AgentName          = get_val(config, tag = "NAME", default_value="QLEARNING")
+        self.path               = get_val(config, tag = "PATH", default_value="models")
+
+        # Need to append the path to relative path
+        self.path               = os.path.join(pref,self.path)
 
 
 
@@ -177,6 +181,10 @@ class BaselineModel(BaseModel):
         self.log_write_grads    = convertStringtoBoolean(get_val(config, tag = "LOG_WRITE_GRADS", default_value="FALSE"))
         self.log_write_hists    = convertStringtoBoolean(get_val(config, tag = "LOG_WRITE_HISTOGRAM", default_value="FALSE"))
 
+        self.path               = get_val(config, tag = "PATH", default_value="models")
+
+        # Need to append the path to relative path
+        self.path               = os.path.join(pref,self.path)
 
 
 
@@ -295,6 +303,10 @@ class DeepNeuralModel(BaseModel):
         self.log_write_grads    = convertStringtoBoolean(get_val(config, tag = "LOG_WRITE_GRADS", default_value="FALSE"))
         self.log_write_hists    = convertStringtoBoolean(get_val(config, tag = "LOG_WRITE_HISTOGRAM", default_value="FALSE"))
 
+        self.path               = get_val(config, tag = "PATH", default_value="models")
+
+        # Need to append the path to relative path
+        self.path               = os.path.join(pref,self.path)
 
     def init(self):
 
