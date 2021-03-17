@@ -27,8 +27,12 @@ if f'{pref}/RLLibrary' not in sys.path:
 # importing custom libraries
 from ActionSelection import ActionExploration
 from ConfigReader import Config
-from RLAgents import QLearningAgent, FittedQAgent, DQN, DoubleDQN
+#from RLAgents import QLearningAgent, FittedQAgent, DQN, DoubleDQN
+import RLAgents as agents
 import utils as RLUtils
+
+reload(agents)
+
 
 
 # Run the model
@@ -38,12 +42,12 @@ savePath    = os.path.join(os.environ["RL_PATH"], "models" )
 _time       = datetime.now().strftime("%Y%m%d%H%M")
 
 
-#FQAgent         = FittedQAgent(env, configFile)
-#QLAgent         = QLearningAgent(env, configFile)
-#DQNAgent        = DQN(env = env, configFile = configFile, NetworkShape = [32,32,16])
-#DQNAgent        = DQN(env = env, configFile = configFile, NetworkShape = [16])
-#DoubleDQNAgent  = DoubleDQN(env = env, configFile = configFile, NetworkShape = [16])
-DoubleDQNAgent  = DoubleDQN(env = env, configFile = configFile,  NetworkShape = [16])
+#FQAgent         = agents.FittedQAgent(env, configFile)
+#QLAgent         = agents.QLearningAgent(env, configFile)
+#DQNAgent        = agents.DQN(env = env, configFile = configFile, NetworkShape = [32,32,16])
+#DQNAgent        = agents.DQN(env = env, configFile = configFile, NetworkShape = [16])
+#DoubleDQNAgent  = agents.DoubleDQN(env = env, configFile = configFile, NetworkShape = [16])
+DoubleDQNAgent  = agents.DoubleDQN(env = env, configFile = configFile,  NetworkShape = [16])
 
 #Agent = FQAgent
 #Agent = QLAgent
@@ -117,83 +121,75 @@ Agent.saveConfig(filename = f"config_{Agent.Name}_{_time}.json", savePath = save
 
 
 
-    # after every episode, store the Q values for all state action combination
-    if Agent.Name.upper() == "QLEARNING":
+# ---------- Policy Gradient -----------
 
-        for state in range(Agent.env.observation_space.n):
-            try:
-                Qvalues[state]
-            except KeyError:
-                Qvalues[state] = {}
+reload(agents)
 
-            for action in range(Agent.env.action_space.n):
-                try:
-                    Qvalues[state][action]
+# Run the model
+env         = gym.make("CartPole-v1")
+env         = gym.make("FrozenLake-v0")
 
-                except KeyError:
-                    Qvalues[state][action] = []
+configFile  = os.path.join(pref, "Configs.ini" )
+savePath    = os.path.join(os.environ["RL_PATH"], "models" )
+_time       = datetime.now().strftime("%Y%m%d%H%M")
 
-                Qvalues[state][action].append(Agent.Qmodel.model[state, action])
+reinforceAgent  = agents.Reinforce(env = env, configFile = configFile,  model = None, NetworkShape = [24,12])
+
+Agent = reinforceAgent
+
+
+
+
+loss = []
+mode = "TRAIN"
+for _thisepisode in tqdm(range(Agent.NbEpisodesTrain)):
+
+    # reset the environment
+    _currentState = env.reset()
+
+    _episodicReward = 0
+    _dead = False
+    _thisstepsTaken = 0
+    Agent.Tensorboard.step = _thisepisode
+
+
+    while not _dead:
+
+        #print(_thisstepsTaken)
+        # get the action from agent
+        action, actionProb = Agent.getAction(_currentState, mode = mode)
+
+        # perform the action
+        _nextState, _reward, _dead, _info = env.step(action)
+
+        # record into memory
+        Agent.updateMemory(_currentState, action, _reward, _nextState, _dead, actionProb)
+        _thisstepsTaken += 1
+        _episodicReward += _reward
+        # update States
+        _currentState = _nextState
+
+        # train the agent and update the state
+        if _dead:
+            Agent.updatePolicy()
         
+            # ---- For logging ------
+            # In case of Neural networks, create tensorboard flow
+            Agent.updateLoggerInfo(episodeCount = _thisepisode, episodicReward = _episodicReward, \
+                                    episodicStepsTaken = _thisstepsTaken, mode = "TRAIN")
 
 
 
 
-Agent.plots.showEpisodicReward(mode = "TRAIN")
-Agent.plots.showStatesExploration()
-Agent.plots.showEpisodicLearning(Qvalues, state=0)
-Agent.plots.showEpisodicLearning(Qvalues, state=10)
+# save model & save config
+print(f"Model & config save path: {Agent.path}") 
+Agent.PolicyModel.save(name = f"model_{Agent.Name}_{_time}.h5", path = savePath)
+Agent.saveConfig(filename = f"config_{Agent.Name}_{_time}.json", savePath = savePath)
 
 
 
-import random
-from utils import getOneHotrepresentation
-batch_size = 32
-
-# pick out samples from memory based on batch size
-samples = random.sample(Agent.memory, batch_size)
 
 
-# for all experience in batchsize
-curStates       = list(list(zip(*samples)))[0]
-actions         = list(list(zip(*samples)))[1]
-nextStates      = list(list(zip(*samples)))[3]
-rewards         = list(list(zip(*samples)))[2]
-done            = list(list(zip(*samples)))[4]
-
-
-inputStates     = getOneHotrepresentation(curStates, num_classes=Agent.env.observation_space.n)
-predict         = Agent.Qmodel.predict(inputStates)
-
-# --------- CHANGE HERE FOR DDQN ---------
-# ------ For DQN, target comes from the target model
-# using bellman equation 
-target          = np.zeros(shape = predict.shape)
-
-# Step 1: get the action that maximizes the Q value for next state using main model
-# Step 2: get the Qvalue for above action from TARGET model
-
-nextQvalues_main        = Agent.Qmodel.predict(getOneHotrepresentation(nextStates, num_classes=Agent.env.observation_space.n)) 
-nextQvalues_target      = Agent.Targetmodel.predict(getOneHotrepresentation(nextStates, num_classes=Agent.env.observation_space.n)) 
-
-
-
-argmax_action           = list(map(np.argmax, nextQvalues_main))
-
-__indexes               = (np.arange(len(nextQvalues_target)), np.array(argmax_action))
-selectedQvalues         = nextQvalues_target[__indexes]
-
-#max_nextQvalues = list(map(max, nextQvalues))
-
-# if done (dead), target is just the terminal reward 
-for index, action in enumerate(actions):
-    target[index][int(action)] = rewards[index] + (1 - done[index]) * Agent.discountfactor * selectedQvalues[index]
-
-# --------- --------- --------- --------- ---------
-
-
-# mini batch mode learning
-self.Qmodel.fit(X_train=inputStates, y_train = np.array(target), \
-                batch_size = batch_size, epochs = epochs, verbose = verbose, \
-                callbacks= self.callbacks if terminal_state else None)
+plt.plot(Agent.EpisodicRewards["TRAIN"])
+plt.plot(Agent.EpisodicSteps["TRAIN"])
 
