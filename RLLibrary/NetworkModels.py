@@ -15,7 +15,7 @@ from abc import ABC, abstractclassmethod
 
 pref = os.environ["RL_PATH"]
 
-from Callbacks import ModifiedTensorBoardCallback, GradCallBack
+from Callbacks import ModifiedTensorBoardCallback
 from utils import convertStringtoBoolean, get_val
 
 

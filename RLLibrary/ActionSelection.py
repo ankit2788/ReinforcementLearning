@@ -3,7 +3,7 @@ import random
 from abc import ABC, abstractclassmethod
 
 
-def ActionExploration(config, method = "EPSILON_GREEDY"):
+def ActionExploration(method = "EPSILON_GREEDY", **kwargs):
 
     """
     config: ConfigReader object 
