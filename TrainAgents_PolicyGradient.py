@@ -42,17 +42,60 @@ logger.getLogger("PG_Train")
 
 
 # Run the model
-env         = gym.make("FrozenLake-v0")
+#env         = gym.make("FrozenLake-v0")
 configFile  = os.path.join(pref, "Configs.ini" )
 savePath    = os.path.join(os.environ["RL_PATH"], "models" )
 _time       = datetime.now().strftime("%Y%m%d%H%M")
 
+env = gym.make("Pong-v0")
+state = env.reset()
+prev_x = None
+score = 0
+episode = 0
 
-ReinforceAgent   = PolicyGradientAgents.REINFORCE(env, configFile,  setbaseline = False, NetworkShape = [16])
+state_size = 80 * 80
+action_size = env.action_space.n
+
+#ReinforceAgent   = PolicyGradientAgents.REINFORCE(env, configFile,  setbaseline = False, NetworkShape = [16])
+ReinforceAgent   = PolicyGradientAgents.PGAgent(state_size, action_size)
+
+
+def preprocess(I):
+    I = I[35:195]
+    I = I[::2, ::2, 0]
+    I[I == 144] = 0
+    I[I == 109] = 0
+    I[I != 0] = 1
+    return I.astype(np.float).ravel()
 
 Agent = ReinforceAgent
 update_frequency = 10   # update policy after every 10 episodes
 
+while True:
+    env.render()
+
+    cur_x = preprocess(state)
+    x = cur_x - prev_x if prev_x is not None else np.zeros(state_size)
+    prev_x = cur_x
+
+    action, prob = Agent.act(x)
+    state, reward, done, info = env.step(action)
+    score += reward
+    Agent.memorize(x, action, prob, reward)
+
+    if done:
+        episode += 1
+        Agent.train()
+        print('Episode: %d - Score: %f.' % (episode, score))
+
+        # update tensorboard log
+        Agent.updateLoggerInfo(episodeCount = episode-1, episodicReward = score)
+
+        score = 0
+        state = env.reset()
+        prev_x = None
+
+"""
 loss = []
 mode = "TRAIN"
 for _thisepisode in tqdm(range(Agent.NbEpisodesTrain)):
@@ -78,10 +121,10 @@ for _thisepisode in tqdm(range(Agent.NbEpisodesTrain)):
         # record into memory
         Agent.updateMemory(_currentState, action, _reward, _nextState, _dead, actionProb)
 
-        """
-        if _thisstepsTaken%40 == 0:
-            logger.info(f'Episode: {_thisepisode+1} Step: {_thisstepsTaken} ')
-        """
+        
+        #if _thisstepsTaken%40 == 0:
+        #    logger.info(f'Episode: {_thisepisode+1} Step: {_thisstepsTaken} ')
+        
         
         # update States
         _currentState = _nextState
@@ -92,8 +135,8 @@ for _thisepisode in tqdm(range(Agent.NbEpisodesTrain)):
         # if game over, then exit the loop
         if _dead == True:
 
-            if (_thisepisode+1)%update_frequency == 0:
-                Agent.updatePolicy()
+            #if (_thisepisode+1)%update_frequency == 0:
+            Agent.updatePolicy()
 
             # ---- For logging ------
             # In case of Neural networks, create tensorboard flow
@@ -117,4 +160,4 @@ Agent.saveConfig(filename = f"config_{Agent.Name}_{_time}.json", savePath = save
 
 
 
-
+"""

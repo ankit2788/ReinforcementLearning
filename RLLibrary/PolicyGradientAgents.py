@@ -14,6 +14,10 @@ from datetime import datetime
 import itertools
 
 from tensorflow.keras.callbacks import History
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Dense, Flatten, Reshape, Convolution2D, Conv2D
+from tensorflow.keras.optimizers import Adam
+
 
 
 
@@ -145,7 +149,7 @@ class REINFORCE():
 
         # RL params
         self.discountfactor         = float(get_val(self.config, tag = "DISCOUNT_FACTOR", default_value= 0.9)) 
-        self.policy_learning         = float(get_val(self.config, tag = "POLICY_LEARNING", default_value= 0.9)) 
+        self.policy_learning_rate   = float(get_val(self.config, tag = "POLICY_LEARNING", default_value= 0.9)) 
         self.normalizeRewards       = convertStringtoBoolean(get_val(self.config, tag = "NORMALIZE_REWARDS", default_value="TRUE"))
 
         # memory
@@ -239,10 +243,25 @@ class REINFORCE():
 
 
         # ---- Compute the Policy gradient
+
+        # --- below formulation comes from the derivative of cross entropy loss function wrt to output layer
+        # grad(cross entrpy loss) = p_i - y_i --> predicted value  - actual value        
+        # https://deepnotes.io/softmax-crossentropy
+        # https://cs231n.github.io/neural-networks-2/#losses  --> for more detailed info on losses and its derivation
+        # http://karpathy.github.io/2016/05/31/rl/
+
+
+        # in the below, actualvalue --> 1 for chosen action and 0 for not chosen action --> represented by onehotrepresentation
+        #               predictedValue --> predicted probs from network 
+
         gradient = np.subtract(getOneHotrepresentation(actions,self.env.action_space.n ), actionProb)
-        gradient *= discountedRewards * self.policy_learning
+        gradient *= discountedRewards * self.policy_learning_rate
 
+        # updating actual probabilities (y_train) to take into account the change in policy gradient change
+        # \theta = \theta + alpha*rewards * gradient
+        y_train = actionProb + np.vstack(gradient)
 
+        # Get X
         try:
             self.env.observation_space.n
             X_train = getOneHotrepresentation(curStates, num_classes=self.inputShape)
@@ -250,23 +269,9 @@ class REINFORCE():
             X_train = curStates    
 
 
-        y_train = actionProb + np.vstack(gradient)
-
-        # mini batch mode learning
-        #self.PolicyModel.fit(X_train=X_train, y_train = y_train, \
-        #                batch_size = self.batchSize, epochs = self.epochs, verbose = 0, \
-        #                callbacks= self.callbacks)
-
         logger.info(f"{self.Name} - Updating Policy ")
         history = self.PolicyModel.model.train_on_batch(X_train, y_train)
         
-
-        # --- get the gradients if Gradient logging is turned on
-        if self.log_write_grads:
-            grads = self.PolicyModel.get_gradients(X_train, y_train)
-
-            self.gradTensorBoard.step += 1
-            self.gradTensorBoard.update_grads(gradStats = grads)
 
         # reset memory
         self.memory = []
@@ -283,7 +288,7 @@ class REINFORCE():
         # how the training evolves with episode
 
         self.Tensorboard.step += 1
-        
+
         # 1. After every episode, update the episodic reward & steps taken
         self.updateEpisodicInfo(episodicReward, episodicStepsTaken, mode=mode)
 
@@ -293,7 +298,9 @@ class REINFORCE():
         #self.Targetmodel.tensorboard.update_stats_histogram()
 
         # 3. Create other logging stats
-        self.Tensorboard.update_stats(rewards = self.EpisodicRewards[mode][-1])
+        self.Tensorboard.update_stats(rewards = self.EpisodicRewards[mode][-1], steps = episodicStepsTaken)
+
+        """
         if not episodeCount % self.AggregateStatsEvery or episodeCount == 1:
 
             
@@ -309,3 +316,116 @@ class REINFORCE():
                                             reward_max=max_reward, steps_max = max_steps)
 
 
+        """
+
+
+
+
+
+class PGAgent:
+    def __init__(self, state_size, action_size):
+        self.Name = "PGAgent"
+        self.state_size = state_size
+        self.action_size = action_size
+        self.gamma = 0.99
+        self.learning_rate = 0.001
+        self.states = []
+        self.gradients = []
+        self.rewards = []
+        self.probs = []
+
+        self.EpisodicRewards    = {"TRAIN": [], "TEST": []}
+        self.EpisodicSteps      = {"TRAIN": [], "TEST": []}
+
+
+        self.__time             = datetime.now().strftime("%Y%m%d%H%M")
+
+        loggingPath         = f"{pref}/logs/{self.Name}_{self.__time}.log"
+        #checkpointPath      = f"{pref}/ModelCheckpoint/{self.Name}_{self.__time}.ckpt"
+        
+
+        self.model = self._build_model()
+        self.model.summary()
+        self.Tensorboard    = ModifiedTensorBoardCallback(model = self.model, log_dir = loggingPath)        
+
+    def _build_model(self):
+        model = Sequential()
+        model.add(Reshape((1, 80, 80), input_shape=(self.state_size,)))
+        #model.add(Convolution2D(32, 6, 6, subsample=(3, 3), border_mode='same',
+        #                        activation='relu', init='he_uniform'))
+        model.add(Conv2D(32, (6, 6), strides=(3, 3), padding='same',
+                                activation='relu', kernel_initializer='he_uniform'))
+        model.add(Flatten())
+        model.add(Dense(64, activation='relu', kernel_initializer='he_uniform'))
+        model.add(Dense(32, activation='relu', kernel_initializer='he_uniform'))
+        model.add(Dense(self.action_size, activation='softmax'))
+        opt = Adam(lr=self.learning_rate)
+        model.compile(loss='categorical_crossentropy', optimizer=opt)
+        return model
+
+    def memorize(self, state, action, prob, reward):
+        y = np.zeros([self.action_size])
+        y[action] = 1
+        self.gradients.append(np.array(y).astype('float32') - prob)
+        self.states.append(state)
+        self.rewards.append(reward)
+
+    def act(self, state):
+        state = state.reshape([1, state.shape[0]])
+        aprob = self.model.predict(state, batch_size=1).flatten()
+        self.probs.append(aprob)
+        prob = aprob / np.sum(aprob)
+        action = np.random.choice(self.action_size, 1, p=prob)[0]
+        return action, prob
+
+    def discount_rewards(self, rewards):
+        discounted_rewards = np.zeros_like(rewards)
+        running_add = 0
+        for t in reversed(range(0, rewards.size)):
+            if rewards[t] != 0:
+                running_add = 0
+            running_add = running_add * self.gamma + rewards[t]
+            discounted_rewards[t] = running_add
+        return discounted_rewards
+
+    def train(self):
+        gradients = np.vstack(self.gradients)
+        rewards = np.vstack(self.rewards)
+        rewards = self.discount_rewards(rewards)
+        reward = (rewards - np.mean(rewards)) / (np.std(rewards) + 1e-7)
+        gradients *= rewards
+        X = np.squeeze(np.vstack([self.states]))
+        Y = self.probs + self.learning_rate * np.squeeze(np.vstack([gradients]))
+        self.model.train_on_batch(X, Y)
+        self.states, self.probs, self.gradients, self.rewards = [], [], [], []
+
+    def load(self, name):
+        self.model.load_weights(name)
+
+    def save(self, name):
+        self.model.save_weights(name)
+
+
+
+    def updateEpisodicInfo(self, episodeReward,mode = "TRAIN"):
+
+        self.EpisodicRewards[mode].append(episodeReward)
+        #self.EpisodicSteps[mode].append(episodeSteps)
+
+
+    def updateLoggerInfo(self, episodeCount, episodicReward,  mode = "TRAIN"):
+        # This is used to update all the logging related information
+        # how the training evolves with episode
+
+        self.Tensorboard.step += 1
+
+        # 1. After every episode, update the episodic reward & steps taken
+        self.updateEpisodicInfo(episodicReward,mode=mode)
+
+        # 2. log model weights & bias Info after every episode 
+        self.Tensorboard.update_stats_histogram(model = self.model)
+        #self.Qmodel.tensorboard.update_stats_histogram()
+        #self.Targetmodel.tensorboard.update_stats_histogram()
+
+        # 3. Create other logging stats
+        self.Tensorboard.update_stats(rewards = self.EpisodicRewards[mode][-1])
