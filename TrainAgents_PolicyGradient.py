@@ -29,7 +29,8 @@ if f'{pref}/RLLibrary' not in sys.path:
 from ActionSelection import ActionExploration
 from ConfigReader import Config
 #from RLAgents import QLearningAgent, FittedQAgent, DQN, DoubleDQN
-import PolicyGradientAgents
+from Agents.PolicyGradient.Reinforce import REINFORCE, REINFORCE_BASELINE
+
 import utils as RLUtils
 
 
@@ -42,60 +43,66 @@ logger.getLogger("PG_Train")
 
 
 # Run the model
-#env         = gym.make("FrozenLake-v0")
+#env         = gym.make("CartPole-v1")
 configFile  = os.path.join(pref, "Configs.ini" )
 savePath    = os.path.join(os.environ["RL_PATH"], "models" )
 _time       = datetime.now().strftime("%Y%m%d%H%M")
 
-env = gym.make("Pong-v0")
+env = gym.make("CartPole-v1")
 state = env.reset()
-prev_x = None
-score = 0
-episode = 0
-
-state_size = 80 * 80
-action_size = env.action_space.n
-
-#ReinforceAgent   = PolicyGradientAgents.REINFORCE(env, configFile,  setbaseline = False, NetworkShape = [16])
-ReinforceAgent   = PolicyGradientAgents.PGAgent(state_size, action_size)
 
 
-def preprocess(I):
-    I = I[35:195]
-    I = I[::2, ::2, 0]
-    I[I == 144] = 0
-    I[I == 109] = 0
-    I[I != 0] = 1
-    return I.astype(np.float).ravel()
+#ReinforceAgent   = PolicyGradientAgents.REINFORCE_BASELINE(env, configFile,   NetworkShape = [24,12])
+#ReinforceAgent   = PolicyGradientAgents.REINFORCE_C(env = env)
+#ReinforceAgent   = PolicyGradientAgents.REINFORCE(env = env, configFile = configFile,   NetworkShape = [24,12])
+
+modelParams = {"Name": "Policy", "NetworkShape": [24, 12], "learning_rate": 0.001, \
+                "optimizer": "ADAM", "loss": "categorical_crossentropy", }
+ReinforceAgent   = REINFORCE(env = env, configFile = configFile, **modelParams)
+
 
 Agent = ReinforceAgent
-update_frequency = 10   # update policy after every 10 episodes
-
-while True:
-    env.render()
-
-    cur_x = preprocess(state)
-    x = cur_x - prev_x if prev_x is not None else np.zeros(state_size)
-    prev_x = cur_x
-
-    action, prob = Agent.act(x)
-    state, reward, done, info = env.step(action)
-    score += reward
-    Agent.memorize(x, action, prob, reward)
-
-    if done:
-        episode += 1
-        Agent.train()
-        print('Episode: %d - Score: %f.' % (episode, score))
-
-        # update tensorboard log
-        Agent.updateLoggerInfo(episodeCount = episode-1, episodicReward = score)
-
-        score = 0
-        state = env.reset()
-        prev_x = None
+update_frequency = 1   # update policy after every 10 episodes
+episodes = 400
 
 """
+
+total_rewards=np.zeros(episodes)
+rollout_n = 1
+
+for episode in range(episodes):
+    # each episode is a new game env
+    state=env.reset()
+    done=False          
+    episode_reward=0 #record episode reward
+    ep_steps = 0
+    
+    while not done:
+        # play an action and record the game state & reward per episode
+        action, prob=Agent.get_action(state)
+        next_state, reward, done, _=env.step(action)
+        Agent.remember(state, action, prob, reward)
+        state=next_state
+        episode_reward+=reward
+        ep_steps += 1
+
+        #if episode%render_n==0: ## render env to visualize.
+            #env.render()
+        if done:
+            # update policy 
+            if episode%rollout_n==0:
+                history=Agent.update_policy()
+
+            logger.info(f'Episode: {episode+1} Steps: {ep_steps} Reward:{episode_reward}  ')
+            Agent.updateLoggerInfo(episodeCount = episode, episodicReward = episode_reward, \
+                                    episodicStepsTaken = ep_steps, mode = "TRAIN")                
+
+        total_rewards[episode]=episode_reward
+    
+
+
+"""
+
 loss = []
 mode = "TRAIN"
 for _thisepisode in tqdm(range(Agent.NbEpisodesTrain)):
@@ -153,11 +160,11 @@ for _thisepisode in tqdm(range(Agent.NbEpisodesTrain)):
 
 
 # save model & save config
-print(f"Model & config save path: {Agent.path}") 
-Agent.PolicyModel.save(name = f"model_{Agent.Name}_{_time}.h5", path = savePath)
-Agent.saveConfig(filename = f"config_{Agent.Name}_{_time}.json", savePath = savePath)
+#print(f"Model & config save path: {Agent.path}") 
+#Agent.PolicyModel.save(name = f"model_{Agent.Name}_{_time}.h5", path = savePath)
+#Agent.saveConfig(filename = f"config_{Agent.Name}_{_time}.json", savePath = savePath)
 
 
 
 
-"""
+#"""
