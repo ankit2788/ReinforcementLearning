@@ -30,6 +30,7 @@ from ActionSelection import ActionExploration
 from ConfigReader import Config
 #from RLAgents import QLearningAgent, FittedQAgent, DQN, DoubleDQN
 import Agents.PolicyGradient.Reinforce as Reinforce
+import Agents.PolicyGradient.ActorCritic as ActorCritic
 
 import utils as RLUtils
 
@@ -52,25 +53,26 @@ env = gym.make("CartPole-v1")
 state = env.reset()
 
 
-#ReinforceAgent   = PolicyGradientAgents.REINFORCE_BASELINE(env, configFile,   NetworkShape = [24,12])
-#ReinforceAgent   = PolicyGradientAgents.REINFORCE_C(env = env)
-#ReinforceAgent   = PolicyGradientAgents.REINFORCE(env = env, configFile = configFile,   NetworkShape = [24,12])
-
+# ----- Reinforce
 modelParams = {"Name": "Policy", "NetworkShape": [24, 12], "learning_rate": 0.001, \
                 "optimizer": "ADAM", "loss": "categorical_crossentropy", }
+
 valueParams = {"Name_value": "Value", "NetworkShape_value": [24, 12], "learning_rate_value": 0.01, \
                 "optimizer_value": "ADAM", "loss_value": "mse", }
 
-ReinforceAgent   = Reinforce.REINFORCE_EAGER(env = env, configFile = configFile, **modelParams)
-
-
+#ReinforceAgent   = Reinforce.REINFORCE_EAGER(env = env, configFile = configFile, **modelParams)
 #ReinforceAgent   = Reinforce.REINFORCE_BASELINE(env = env, configFile = configFile, **modelParams, **valueParams)
+# ----------------
 
+# ------Actor Critic
+modelParams = {"Name": "ActorCritic", "NetworkShape": [24, 12], "learning_rate": 0.01, \
+                "optimizer": "ADAM", }
+
+ReinforceAgent   = ActorCritic.ActorCritic(env = env, configFile = configFile, **modelParams)
 
 
 
 Agent = ReinforceAgent
-update_frequency = 1   # update policy after every 10 episodes
 episodes = 400
 
 """
@@ -139,7 +141,11 @@ for _thisepisode in tqdm(range(Agent.NbEpisodesTrain)):
         _nextState, _reward, _dead, _info = env.step(action)
 
         # record into memory
-        Agent.updateMemory(_currentState, action, _reward, _nextState, _dead, actionProb)
+        if "REINFORCE" in Agent.Name :
+
+            Agent.updateMemory(_currentState, action, _reward, _nextState, _dead, actionProb)
+        else:
+            Agent.updateMemory(_currentState, action, _reward, _nextState, _dead, actionProb, value)
 
                 
         # update States

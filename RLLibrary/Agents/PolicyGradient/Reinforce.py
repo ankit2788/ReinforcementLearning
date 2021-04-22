@@ -7,7 +7,7 @@ from configparser import ConfigParser
 from datetime import datetime
 
 from tensorflow.keras.callbacks import History
-from tensorflow.keras.models import Sequential
+from tensorflow.keras.models import Sequential, Model
 from tensorflow.keras.layers import Dense, Flatten, Reshape, Convolution2D, Conv2D
 import tensorflow.keras.optimizers as optimizers
 from tensorflow.keras import backend as K

@@ -7,10 +7,10 @@ from configparser import ConfigParser
 from datetime import datetime
 
 from tensorflow.keras.callbacks import History
-from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import Dense, Flatten, Reshape, Convolution2D, Conv2D
+from tensorflow.keras.models import Sequential, Model
+from tensorflow.keras.layers import Dense, Flatten, Reshape, Convolution2D, Conv2D, Input
 import tensorflow.keras.optimizers as optimizers
-
+import tensorflow as tf
 
 
 try: 
@@ -70,7 +70,7 @@ class ActorCritic(PGAgent):
             self.inputShape = self.env.observation_space.shape[0]
 
         # create ActorCritic model  (Both value and policy models are needed)
-        self.create_model()
+        self.create_model(**kwargs)
 
 
         self.setCallbacks()
@@ -94,7 +94,7 @@ class ActorCritic(PGAgent):
 
             self.hiddenLayer = _hiddenLayerinputs
 
-        self.actorLayer     = Dense(units = outputDims, activation = "softmax")(self.hiddenLayer)
+        self.actorLayer     = Dense(units = self.env.action_space.n, activation = "softmax")(self.hiddenLayer)
         self.criticLayer    = Dense(units = 1, activation = "linear")(self.hiddenLayer)     # since its a value per state, output layer has only 1 dimension
 
         self.SharedNetwork  = Model(inputs= inputShape, outputs = [self.actorLayer, self.criticLayer], name = "SharedDesign")
@@ -120,7 +120,7 @@ class ActorCritic(PGAgent):
     def setCallbacks(self):
         # ---- sets callback functions to record looging
         loggingPath         = f"{pref}/logs/Policy/{self.Name}_{self.__time}.log"
-        super().setCallbacks(networkModel=self.SharedNetwork.model, loggingPath=loggingPath)
+        super().setCallbacks(networkModel=self.SharedNetwork, loggingPath=loggingPath)
 
 
 
@@ -139,6 +139,10 @@ class ActorCritic(PGAgent):
 
     def getAction(self, state, mode = "TRAIN"):
         # based on the state, predict the action to be taken using the network
+        # returns:
+        # 1. Action taken
+        # 2. Prob distribution of individual action given a state
+        # 3. Value of current state given current policy
         
         try:
             self.env.observation_space.n
@@ -148,74 +152,71 @@ class ActorCritic(PGAgent):
 
 
         # the model prediction predicts the prob space for all actions
-        actionProb, ValueFunction   = self.SharedNetwork.model.predict(_state).flatten()
-
+        actionProb, value   = self.SharedNetwork(_state)
+        actionProb = actionProb.numpy()[0]
+        value = value.numpy()[0]
+        
         # norm action probability distribution
-        actionProb         /= np.sum(actionProb)
+        actionProb         /= sum(actionProb)
+        
 
         # sample the action based on the probability
         action             = np.random.choice(self.env.action_space.n, p = actionProb)
 
-        return action, actionProb
+        return action, actionProb, value
 
 
     
-    def updateMemory(self, currentState, currentAction, reward, nextState, dead, actionProb):
-        self.memory.append((currentState, currentAction, reward, nextState, dead, actionProb))
+    def updateMemory(self, currentState, currentAction, reward, nextState, dead, actionProb, value):
+        self.memory.append((currentState, currentAction, reward, nextState, dead, actionProb, value))
 
     def train(self):
 
-        
+        with tf.GradientTape() as tape:
 
-        # for all experience in batchsize
-        curStates       = np.vstack(list(list(zip(*self.memory)))[0])
-        actions         = np.vstack(list(list(zip(*self.memory)))[1])
-        nextStates      = np.vstack(list(list(zip(*self.memory)))[3])
-        rewards         = np.vstack(list(list(zip(*self.memory)))[2])
-        done            = np.vstack(list(list(zip(*self.memory)))[4])
+            loss_critic = []
+            loss_actor  = []
 
-        actionProb      = np.vstack(list(list(zip(*self.memory)))[5])
-
-        # compute the discounted rewards for the entire episode and normalize it
-        discounted_rewards = discountRewards(rewards,  discountfactor=self.discountfactor)
-        discounted_rewards = (discounted_rewards - np.mean(discounted_rewards))/ (np.std(discounted_rewards) + 1e-7)            # to avoid division by 0
+            for index, sample in enumerate(self.memory):
 
 
 
-        # ---- Compute the Policy gradient
-
-        # --- below formulation comes from the derivative of cross entropy loss function wrt to output layer
-        # grad(cross entrpy loss) = p_i - y_i --> predicted value  - actual value        
-        # https://deepnotes.io/softmax-crossentropy
-        # https://cs231n.github.io/neural-networks-2/#losses  --> for more detailed info on losses and its derivation
-        # http://karpathy.github.io/2016/05/31/rl/
+                # get log prob
+                state   = tf.Variable([sample[0]], trainable=True, dtype=tf.float32)
+                action, reward, nextState  = sample[1], sample[2], sample[3]
+                nextState = tf.Variable([nextState], trainable=True, dtype=tf.float32)
 
 
-        # in the below, actualvalue --> 1 for chosen action and 0 for not chosen action --> represented by onehotrepresentation
-        #               predictedValue --> predicted probs from network 
 
-        gradient = np.subtract(getOneHotrepresentation(actions,self.env.action_space.n ), actionProb)
-        gradient *= discounted_rewards 
-        gradient *= self.policy_learning_rate
+                # run shared network to get action prob distro and value associated with that state
+                actionProbDistro, _currStateValue = self.SharedNetwork(state, training = True)
+                _actionProbDistro, _nextStateValue = self.SharedNetwork(nextState, training = True)
 
-        # updating actual probabilities (y_train) to take into account the change in policy gradient change
-        # \theta = \theta + alpha*rewards * gradient
-        y_train = actionProb + np.vstack(gradient)
+                # compute TD error
+                delta = reward + self.discountfactor*_nextStateValue - _currStateValue
 
-        # Get X
-        try:
-            self.env.observation_space.n
-            X_train = getOneHotrepresentation(curStates, num_classes=self.inputShape)
-        except:
-            X_train = curStates    
+                # compute critic loss
+                loss_sample_critic = tf.math.square(delta)
+
+                # compute actor loss
+                actionProb      = actionProbDistro[0, action]
+                loss_sample_actor =  tf.math.log(actionProb) * delta
+
+                loss_actor.append(-loss_sample_actor)
 
 
-        logger.info(f"{self.Name} - Updating Policy ")
-        history = self.PolicyNetwork.model.train_on_batch(X_train, y_train)
-        
+            networkLoss = sum(loss_critic) + sum(loss_actor)
 
-        # reset memory
-        self.memory = []
+            logger.info(f"{self.Name} - Updating Policy ")
+
+            # performing Backpropagation to update the network
+            grads = tape.gradient(networkLoss, self.SharedNetwork.trainable_variables)
+            self.SharedNetwork.optimizer.apply_gradients(zip(grads, self.SharedNetwork.trainable_variables))
+
+
+
+            # reset memory
+            self.memory = []
         
 
 
@@ -223,7 +224,7 @@ class ActorCritic(PGAgent):
         # This is used to update all the logging related information
         # how the training evolves with episode
 
-        super().updateLoggerInfo(tensorboard = self.Tensorboard, tensorboardNetwork = self.PolicyNetwork.model, \
+        super().updateLoggerInfo(tensorboard = self.Tensorboard, tensorboardNetwork = self.SharedNetwork, \
                                 allEpisodicRewards = self.EpisodicRewards[mode], allEpisodicSteps = self.EpisodicSteps[mode], \
                                 episodeCount = episodeCount, episodicReward = episodicReward, episodicStepsTaken = episodicStepsTaken)
 
