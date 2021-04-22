@@ -599,7 +599,7 @@ class DNNClassifier():
         modelName           = kwargs["Name"] if "Name" in kwargs.keys() else "DNNClassifier"
         
         self.model = self.create_model(modelName, inputDims, outputDims, neuralNetShape)
-        self.compile()
+        #self.compile()
 
 
     def create_model(self, modelName, inputDims, outputDims, neuralNetShape):
@@ -622,7 +622,7 @@ class DNNClassifier():
 
         model = Model(inputs= inputShape, outputs = self.outputLayer, name = modelName)
 
-        
+
         return model
 
 
@@ -651,5 +651,77 @@ class DNNClassifier():
 
 
 
+
+
+class DNN():
+
+    def __init__(self, dim_input, dim_output, NetworkShape = [], **kwargs):
+        # --- Used as Policy network
+        # based on state and network parameters, predict the action to take
+
+        # dim_input: input dimensions
+        # dim_output: output dimensions
+        # NetworkShape: a list of neurons present in each layer. For baseline model, just use a single layer
+        # Example: Shape: [24,24] --> 
+        # Inputs --> 24 neurons (layer1)  --> 24 neurons (layer2) --> NbActions (output) 
+        
+
+
+        inputDims = dim_input[0] if type(dim_input) is tuple else dim_input
+        
+        outputDims         = dim_output
+        neuralNetShape     = NetworkShape if NetworkShape is not None else [64, 32]
+
+        modelName           = kwargs["Name"] if "Name" in kwargs.keys() else "DNN"
+        
+        self.model = self.create_model(modelName, inputDims, outputDims, neuralNetShape)
+
+
+    def create_model(self, modelName, inputDims, outputDims, neuralNetShape):
+        # create the model
+
+        inputShape     = Input(shape=(inputDims,)) 
+        self.inputLayer     = Dense(units = neuralNetShape[0], activation = "relu")(inputShape)
+
+
+        # get all hidden layers
+        self.hiddenLayer    = self.inputLayer        
+        if len(neuralNetShape) > 1:
+            for _layer in neuralNetShape[1:]:
+                _hiddenLayerinputs = Dense(units = _layer, activation = "relu")(self.hiddenLayer)
+
+            self.hiddenLayer = _hiddenLayerinputs
+
+
+        self.outputLayer = Dense(units = outputDims, activation = "linear")(self.hiddenLayer)
+
+        model = Model(inputs= inputShape, outputs = self.outputLayer, name = modelName)
+
+        
+        return model
+
+
+
+    def compile(self, **kwargs):
+        # setting model compiler
+        loss        = kwargs["loss"] if "loss" in kwargs.keys() else "mse"
+        optimizer   = kwargs["optimizer"] if "optimizer" in kwargs.keys() else "ADAM" 
+
+        learning_rate = kwargs["learning_rate"] if "learning_rate" in kwargs.keys() else 0.001
+
+
+        # create optimizer
+        if optimizer.upper() == "RMSPROP":            
+            optimizer = optimizers.RMSprop(learning_rate = learning_rate)
+        elif optimizer.upper() == "ADAM":            
+            optimizer = optimizers.Adam(learning_rate = learning_rate)
+
+
+        # performance metrics
+        metrics = None
+
+        # compile the model
+        self.model.compile(optimizer = optimizer, loss = loss, metrics = metrics)
+        self.model.summary()
 
 

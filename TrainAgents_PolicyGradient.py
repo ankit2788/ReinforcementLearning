@@ -29,7 +29,7 @@ if f'{pref}/RLLibrary' not in sys.path:
 from ActionSelection import ActionExploration
 from ConfigReader import Config
 #from RLAgents import QLearningAgent, FittedQAgent, DQN, DoubleDQN
-from Agents.PolicyGradient.Reinforce import REINFORCE, REINFORCE_BASELINE
+import Agents.PolicyGradient.Reinforce as Reinforce
 
 import utils as RLUtils
 
@@ -58,7 +58,15 @@ state = env.reset()
 
 modelParams = {"Name": "Policy", "NetworkShape": [24, 12], "learning_rate": 0.001, \
                 "optimizer": "ADAM", "loss": "categorical_crossentropy", }
-ReinforceAgent   = REINFORCE(env = env, configFile = configFile, **modelParams)
+valueParams = {"Name_value": "Value", "NetworkShape_value": [24, 12], "learning_rate_value": 0.01, \
+                "optimizer_value": "ADAM", "loss_value": "mse", }
+
+ReinforceAgent   = Reinforce.REINFORCE_EAGER(env = env, configFile = configFile, **modelParams)
+
+
+#ReinforceAgent   = Reinforce.REINFORCE_BASELINE(env = env, configFile = configFile, **modelParams, **valueParams)
+
+
 
 
 Agent = ReinforceAgent
@@ -119,8 +127,13 @@ for _thisepisode in tqdm(range(Agent.NbEpisodesTrain)):
     while _thisstepsTaken <= Agent.MaxSteps:
 
         _starttime = time.perf_counter()
+
         # get the action from agent
-        action, actionProb = Agent.getAction(_currentState, mode = mode)
+        if "REINFORCE" in Agent.Name :
+            # only actor based methods. Network doesnt return critic values
+            action, actionProb = Agent.getAction(_currentState, mode = mode)
+        else:
+            action, actionProb, value = Agent.getAction(_currentState, mode = mode)            
 
         # perform the action
         _nextState, _reward, _dead, _info = env.step(action)
@@ -128,11 +141,7 @@ for _thisepisode in tqdm(range(Agent.NbEpisodesTrain)):
         # record into memory
         Agent.updateMemory(_currentState, action, _reward, _nextState, _dead, actionProb)
 
-        
-        #if _thisstepsTaken%40 == 0:
-        #    logger.info(f'Episode: {_thisepisode+1} Step: {_thisstepsTaken} ')
-        
-        
+                
         # update States
         _currentState = _nextState
         _thisstepsTaken += 1
@@ -143,7 +152,7 @@ for _thisepisode in tqdm(range(Agent.NbEpisodesTrain)):
         if _dead == True:
 
             #if (_thisepisode+1)%update_frequency == 0:
-            Agent.updatePolicy()
+            Agent.train()
 
             # ---- For logging ------
             # In case of Neural networks, create tensorboard flow
