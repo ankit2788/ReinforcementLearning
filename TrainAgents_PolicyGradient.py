@@ -62,58 +62,8 @@ valueParams = {"Name_value": "Value", "NetworkShape_value": [24, 12], "learning_
 
 #ReinforceAgent   = Reinforce.REINFORCE_EAGER(env = env, configFile = configFile, **modelParams)
 #ReinforceAgent   = Reinforce.REINFORCE_BASELINE(env = env, configFile = configFile, **modelParams, **valueParams)
-# ----------------
-
-# ------Actor Critic
-modelParams = {"Name": "ActorCritic", "NetworkShape": [24, 12], "learning_rate": 0.01, \
-                "optimizer": "ADAM", }
-
-ReinforceAgent   = ActorCritic.ActorCritic(env = env, configFile = configFile, **modelParams)
-
-
-
+"""
 Agent = ReinforceAgent
-episodes = 400
-
-"""
-
-total_rewards=np.zeros(episodes)
-rollout_n = 1
-
-for episode in range(episodes):
-    # each episode is a new game env
-    state=env.reset()
-    done=False          
-    episode_reward=0 #record episode reward
-    ep_steps = 0
-    
-    while not done:
-        # play an action and record the game state & reward per episode
-        action, prob=Agent.get_action(state)
-        next_state, reward, done, _=env.step(action)
-        Agent.remember(state, action, prob, reward)
-        state=next_state
-        episode_reward+=reward
-        ep_steps += 1
-
-        #if episode%render_n==0: ## render env to visualize.
-            #env.render()
-        if done:
-            # update policy 
-            if episode%rollout_n==0:
-                history=Agent.update_policy()
-
-            logger.info(f'Episode: {episode+1} Steps: {ep_steps} Reward:{episode_reward}  ')
-            Agent.updateLoggerInfo(episodeCount = episode, episodicReward = episode_reward, \
-                                    episodicStepsTaken = ep_steps, mode = "TRAIN")                
-
-        total_rewards[episode]=episode_reward
-    
-
-
-"""
-
-loss = []
 mode = "TRAIN"
 for _thisepisode in tqdm(range(Agent.NbEpisodesTrain)):
 
@@ -131,23 +81,14 @@ for _thisepisode in tqdm(range(Agent.NbEpisodesTrain)):
         _starttime = time.perf_counter()
 
         # get the action from agent
-        if "REINFORCE" in Agent.Name :
-            # only actor based methods. Network doesnt return critic values
-            action, actionProb = Agent.getAction(_currentState, mode = mode)
-        else:
-            action, actionProb, value = Agent.getAction(_currentState, mode = mode)            
+        action, actionProb = Agent.getAction(_currentState, mode = mode)
 
         # perform the action
         _nextState, _reward, _dead, _info = env.step(action)
 
         # record into memory
-        if "REINFORCE" in Agent.Name :
+        Agent.updateMemory(_currentState, action, _reward, _nextState, _dead, actionProb, value)
 
-            Agent.updateMemory(_currentState, action, _reward, _nextState, _dead, actionProb)
-        else:
-            Agent.updateMemory(_currentState, action, _reward, _nextState, _dead, actionProb, value)
-
-                
         # update States
         _currentState = _nextState
         _thisstepsTaken += 1
@@ -157,8 +98,66 @@ for _thisepisode in tqdm(range(Agent.NbEpisodesTrain)):
         # if game over, then exit the loop
         if _dead == True:
 
-            #if (_thisepisode+1)%update_frequency == 0:
             Agent.train()
+
+            # ---- For logging ------
+            # In case of Neural networks, create tensorboard flow
+            Agent.updateLoggerInfo(episodeCount = _thisepisode, episodicReward = _episodicReward, \
+                                    episodicStepsTaken = _thisstepsTaken, mode = "TRAIN")
+
+            _endtime = time.perf_counter()
+
+            logger.info(f'Episode: {_thisepisode+1} Steps: {_thisstepsTaken} Reward:{_episodicReward} Time taken: {round(_endtime - _starttime,2)} secs ')
+
+            break
+
+
+"""
+# ----------------
+
+# ------Actor Critic
+modelParams = {"Name": "ActorCritic", "NetworkShape": [1024, 512], "learning_rate": 0.003, \
+                "optimizer": "ADAM", }
+
+ReinforceAgent   = ActorCritic.ActorCritic(env = env, configFile = configFile, **modelParams)
+Agent = ReinforceAgent
+mode = "TRAIN"
+for _thisepisode in tqdm(range(Agent.NbEpisodesTrain)):
+
+    # reset the environment
+    _currentState = env.reset()
+    
+
+    _episodicReward = 0
+    _dead = False
+    _thisstepsTaken = 0
+
+
+    while _thisstepsTaken <= Agent.MaxSteps:
+
+        _starttime = time.perf_counter()
+
+        # get the action from agent
+        action, actionProb, value = Agent.getAction(_currentState, mode = mode)            
+
+        # perform the action
+        _nextState, _reward, _dead, _info = env.step(action)
+
+        # record into memory
+        Agent.updateMemory(_currentState, action, _reward, _nextState, _dead, actionProb, value)
+
+        # learn at every step   
+        Agent.train()     
+
+
+        # update States
+        _currentState = _nextState
+        _thisstepsTaken += 1
+
+        _episodicReward += _reward
+
+        # if game over, then exit the loop
+        if _dead == True:
 
             # ---- For logging ------
             # In case of Neural networks, create tensorboard flow

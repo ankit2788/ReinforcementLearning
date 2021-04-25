@@ -154,12 +154,11 @@ class ActorCritic(PGAgent):
         # the model prediction predicts the prob space for all actions
         actionProb, value   = self.SharedNetwork(_state)
         actionProb = actionProb.numpy()[0]
-        value = value.numpy()[0]
+        value = value.numpy()[0][0]
         
         # norm action probability distribution
-        actionProb         /= sum(actionProb)
+        #actionProb         /= sum(actionProb)
         
-
         # sample the action based on the probability
         action             = np.random.choice(self.env.action_space.n, p = actionProb)
 
@@ -179,27 +178,27 @@ class ActorCritic(PGAgent):
 
             for index, sample in enumerate(self.memory):
 
-
-
                 # get log prob
-                state   = tf.Variable([sample[0]], trainable=True, dtype=tf.float32)
-                action, reward, nextState  = sample[1], sample[2], sample[3]
-                nextState = tf.Variable([nextState], trainable=True, dtype=tf.float32)
-
-
+                state   = tf.Variable([sample[0]], trainable = True,   dtype=tf.float32)
+                nextState   = tf.Variable([sample[3]], trainable = True,   dtype=tf.float32)
+                action, reward, dead  = sample[1], sample[2], sample[4]
+                
+                #nextState = tf.convert_to_tensor([nextState], dtype=tf.float32)
 
                 # run shared network to get action prob distro and value associated with that state
                 actionProbDistro, _currStateValue = self.SharedNetwork(state, training = True)
                 _actionProbDistro, _nextStateValue = self.SharedNetwork(nextState, training = True)
 
                 # compute TD error
-                delta = reward + self.discountfactor*_nextStateValue - _currStateValue
+                # delta = r + gamma*V_(t+1) - V_t
+                delta = reward + self.discountfactor* tf.squeeze(_nextStateValue) * (1 - int(dead)) - tf.squeeze(_currStateValue)
 
                 # compute critic loss
-                loss_sample_critic = tf.math.square(delta)
+                loss_sample_critic = delta**2
+                loss_critic.append(loss_sample_critic)
 
                 # compute actor loss
-                actionProb      = actionProbDistro[0, action]
+                actionProb      = actionProbDistro.numpy()[0, action]
                 loss_sample_actor =  tf.math.log(actionProb) * delta
 
                 loss_actor.append(-loss_sample_actor)
@@ -207,18 +206,18 @@ class ActorCritic(PGAgent):
 
             networkLoss = sum(loss_critic) + sum(loss_actor)
 
-            logger.info(f"{self.Name} - Updating Policy ")
 
             # performing Backpropagation to update the network
             grads = tape.gradient(networkLoss, self.SharedNetwork.trainable_variables)
-            self.SharedNetwork.optimizer.apply_gradients(zip(grads, self.SharedNetwork.trainable_variables))
+            self.SharedNetwork.optimizer.apply_gradients(\
+                (grad, var) for (grad, var) in zip(grads, self.SharedNetwork.trainable_variables) \
+                    if grad is not None)
 
 
 
             # reset memory
             self.memory = []
         
-
 
     def updateLoggerInfo(self, episodeCount, episodicReward, episodicStepsTaken, mode = "TRAIN"):
         # This is used to update all the logging related information
