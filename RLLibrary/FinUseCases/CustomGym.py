@@ -10,10 +10,8 @@ from RLLibrary.utils.loggingConfig import logger
 
 Logger = logger.getLogger("CustomGym")
 
+#print(Logger.handlers, "CustomGym")
 
-# This format is true today, but it's *not* an official spec.
-# [username/](env-name)-v(version)    env-name is group 1, version is group 2
-#
 
 env_id_re = re.compile(r'^(?:[\w:-]+\/)?([\w:.-]+)-v(\d+)$')
 
@@ -87,9 +85,11 @@ class EnvRegistry(object):
 
     def make(self, path, **kwargs):
         if len(kwargs) > 0:
-            logger.info('Making new env: %s (%s)', path, kwargs)
+            #Logger.info('Making new env: %s (%s)', path, kwargs)
+            Logger.info('Making new env: %s (%s)', path, kwargs)
         else:
-            logger.info('Making new env: %s', path)
+            #Logger.info('Making new env: %s', path)
+            Logger.info('Making new env: %s', path)
         spec = self.spec(path)
         env = spec.make(**kwargs)
 
@@ -133,7 +133,8 @@ class EnvRegistry(object):
 
     def register(self, id, **kwargs):
         if id in self.env_specs:
-            logger.warning(f"{id} already registered!")
+            #Logger.info(f"{id} already registered!")
+            Logger.info(f"{id} already registered!")
         self.env_specs[id] = EnvSpec(id, **kwargs)
 
 # Have a global registry

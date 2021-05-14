@@ -59,7 +59,7 @@ class Portfolio(Environment):
                                                     filepath=assetDataPath)
 
         self.DataManager.loadData()
-        Logger.info("Data Loaded")
+        #Logger.info("Data Loaded")
 
         
         # initialize state and action space
@@ -146,11 +146,6 @@ class Portfolio(Environment):
     
         # ------- update feasible actions as well
         currentState = self.getcurrentState()
-        #self.getFeasibleActions()
-
-
-
-        Logger.info("Environment reset")    
 
         
     def updatePortfolioHistory(self):
@@ -294,7 +289,7 @@ class Portfolio(Environment):
         newState = self.getcurrentState()
         #newState = self.observation_space.currentState
 
-        return newState, reward, episodeOver
+        return newState, reward, episodeOver, None
 
 
 

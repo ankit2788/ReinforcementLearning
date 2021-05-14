@@ -1,13 +1,17 @@
 import os
 import logging
 
-dir_path = os.path.dirname(os.path.realpath(__file__))
-log_path = f'{dir_path}/../../logs/'
+from RLLibrary.utils import constants
+
+
 
 logger = logging
-logname = os.path.join(log_path, "Logging.log")
-logging.basicConfig(format='%(asctime)s : %(name)s - %(levelname)s : %(message)s', \
+logname = os.path.join(constants.LOG_DIR, "Logging.log")
+# for handler in logging.root.handlers[:]:
+#     logging.root.removeHandler(handler)
+
+logging.basicConfig(filename=logname, filemode="a",
+                    format='%(asctime)s : %(name)s - %(levelname)s : %(message)s', \
                     datefmt = "%Y-%m-%d %H:%M:%S", \
-                    level=logging.INFO , \
-                    filename=logname, filemode="a")
+                    level=logging.INFO)
 

@@ -22,21 +22,28 @@ class ActorCritic_FF(keras.Model):
         self.criticHiddenUnits  = criticHiddenUnits
 
         # create 2 separate models for actor and critic
-        self.actor = Dummy()
-        self.critic = Dummy()
+        # self.actor = Dummy()
+        # self.critic = Dummy()
 
         # --- Actor --> returns prob distribution for all possible states given state
         for index, layer in enumerate(actorHiddenUnits):
             layer = Dense(units = layer, activation="relu")
-            setattr(self.actor, f"layer{index}", layer)
+            setattr(self, f"actor_layer{index}", layer)
 
-        self.actor.policy = Dense(units = self.action_size, activation="softmax")
+        # final layer
+        layer = Dense(units = self.action_size, activation="softmax")
+        setattr(self, f"actor_policy", layer)
+        #self.actor.policy = Dense(units = self.action_size, activation="softmax")
         
         # --- Critic   --> Value function (given a state)
         for index, layer in enumerate(criticHiddenUnits):
             layer = Dense(units = layer, activation="relu")
-            setattr(self.critic, f"layer{index}", layer)
-        self.critic.values = Dense(units = 1, activation="linear")
+            setattr(self, f"critic_layer{index}", layer)
+
+        # final layer
+        layer = Dense(units = 1, activation="linear")
+        setattr(self, f"critic_values", layer)
+        # self.critic.values = Dense(units = 1, activation="linear")
 
 
 
@@ -49,15 +56,15 @@ class ActorCritic_FF(keras.Model):
 
         # Actor
         for index, layer in enumerate(self.actorHiddenUnits):
-            actor_inputs = getattr(self.actor, f"layer{index}")(actor_inputs)
+            actor_inputs = getattr(self, f"actor_layer{index}")(actor_inputs)
         
-        probs = self.actor.policy(actor_inputs)
+        probs = getattr(self, f"actor_policy")(actor_inputs)
 
         # Critic
         for index, layer in enumerate(self.criticHiddenUnits):
-            critic_inputs = getattr(self.critic, f"layer{index}")(critic_inputs)
+            critic_inputs = getattr(self, f"critic_layer{index}")(critic_inputs)
 
-        values = self.actor.values(critic_inputs)
+        values = getattr(self, f"critic_values")(critic_inputs)
 
         return probs, values
 

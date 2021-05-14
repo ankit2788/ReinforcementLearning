@@ -11,7 +11,6 @@ from RLLibrary.utils.loggingConfig import logger
 
 Logger = logger.getLogger("Actions")
 
-
 class Action(ABC):
     
     def __init__(self):
