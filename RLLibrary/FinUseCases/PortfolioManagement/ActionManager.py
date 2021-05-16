@@ -1,6 +1,40 @@
 import numpy as np
-import random
+import pandas as pd
+import os
 from abc import ABC, abstractclassmethod
+import logging
+
+
+# custom
+from RLLibrary.utils import helper, ConfigReader, constants
+from RLLibrary.utils.loggingConfig import logger
+
+Logger = logger.getLogger("Actions")
+
+class Action(ABC):
+    
+    def __init__(self):
+        pass
+    
+    
+
+class DiscreteActionSpace(Action):
+    
+    def __init__(self, actions):
+        # actions --> list of all actions
+        self.actions = actions
+        self.n = len(actions)
+        Logger.info(f"Action Space set with {self.n} possible actions ")
+        
+
+
+class ContinuousActionSpace(Action):
+    def __init__(self):
+        Logger.info(f"Continuous action space set")
+        
+
+
+
 
 
 def ActionExploration(method = "EPSILON_GREEDY", **kwargs):
