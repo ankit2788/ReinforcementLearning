@@ -45,6 +45,18 @@ CustomGym.register(
                     "penalizeFactors" : {"Risk": -0.08, "ForbiddenAction": -8}})
 
 
+CustomGym.register(
+    id = "PortfolioManagement_CNN-v0",
+    entry_point = 'FinUseCases.PortfolioManagement.EnvironmentManager:Portfolio_MultiStage',
+    kwargs = {"assets" : ["APA", "BMY"], "initialWeight" : [0.5, 0.5], \
+                    "nhistoricalDays" : 30, \
+                    "startDate" : "2019-01-01", "endDate" : "2019-12-31", \
+                    "actions" : [(-0.1,0.1)], \
+                    "assetDataPath" : os.path.join(DATA_DIR, "PortfolioManagement"), \
+                    "config" : {"initialCash": 1000000, "minCash": 0.02, "transactionFee": 0.0001}, 
+                    "penalizeFactors" : {"Risk": -0.08, "ForbiddenAction": -8}})
+
+
 
 # ------ Defining Strategies --------
 
@@ -157,6 +169,52 @@ class RLStrategy_A3C(Strategy):
     def plotPerformance(self):
         self.env.render()
 
+
+class RLStrategy_A3C_CNN(Strategy):
+    # This strategy is just buy and hold
+
+    def __init__(self, envName = "PortfolioManagement-v0", **env_args):
+
+        self.envName = envName
+        self.envargs = env_args
+        Logger.info("Setting up  A3C agent ")
+
+
+
+    def train(self, cores = 1, save_dir = os.path.join(MODEL_DIR, "PortfolioManagement"), MAX_EPISODES = 4000, \
+                ActorCriticModel = None, \
+                actorHiddenUnits = [32], criticHiddenUnits = [32], optimizer_learning_rate = 1e-4):
+
+        # create the master agent
+        Logger.info("Training with A3C agent ")
+
+        self.masterAgent = A3CAgent.MasterAgent_Multi(envName = self.envName, cores = cores, save_dir = save_dir, \
+                            MAX_EPISODES = MAX_EPISODES, ActorCriticModel = ActorCriticModel, \
+                            optimizer_learning_rate = optimizer_learning_rate,  \
+                            **self.envargs)
+
+        self.masterAgent.train()
+
+
+
+
+    def run(self):
+
+        Logger.info("Learning")
+
+        currentState = self.env.reset()
+        episodeOver = False
+        while not episodeOver:
+            action = list(self.actions[0])
+            newstate, reward, episodeOver = self.env.step(action)
+            currentState = newstate
+
+        portHistory = self.env.getPortfolioHistory() 
+        return portHistory
+
+
+    def plotPerformance(self):
+        self.env.render()
 
 
 # a = BuyandHoldStrategy()

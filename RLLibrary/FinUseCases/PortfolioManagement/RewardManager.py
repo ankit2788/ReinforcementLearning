@@ -5,7 +5,7 @@ class RewardCategory1():
     def __init__(self, riskPenalizeFactor, actionPenalizeFactor, clipReward = True, clipRange = [-5,5]):
 
         self.riskPenalizeFactor = riskPenalizeFactor
-        self.actionPenalizeFactor = riskPenalizeFactor
+        self.actionPenalizeFactor = actionPenalizeFactor
 
         self.clipReward = clipReward
         self.clipRange = clipRange
