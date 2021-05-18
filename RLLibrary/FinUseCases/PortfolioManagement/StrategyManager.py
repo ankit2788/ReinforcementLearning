@@ -18,6 +18,8 @@ from abc import ABC, abstractclassmethod
 
 from RLLibrary.FinUseCases import CustomGym
 from RLLibrary.FinUseCases.PortfolioManagement.ModelManager.A3C import Agent as A3CAgent
+from RLLibrary.FinUseCases.PortfolioManagement.ModelManager.DQN import Agent as DQNAgent
+
 from RLLibrary.FinUseCases.PortfolioManagement import ActionManager
 
 reload(ActionManager)
@@ -194,6 +196,53 @@ class RLStrategy_A3C_CNN(Strategy):
                             **self.envargs)
 
         self.masterAgent.train()
+
+
+
+
+    def run(self):
+
+        Logger.info("Learning")
+
+        currentState = self.env.reset()
+        episodeOver = False
+        while not episodeOver:
+            action = list(self.actions[0])
+            newstate, reward, episodeOver = self.env.step(action)
+            currentState = newstate
+
+        portHistory = self.env.getPortfolioHistory() 
+        return portHistory
+
+
+    def plotPerformance(self):
+        self.env.render()
+
+class RLStrategy_DQN(Strategy):
+    # This strategy is just buy and hold
+
+    def __init__(self, envName = "PortfolioManagement-v0", **env_args):
+
+        self.envName = envName
+        self.envargs = env_args
+
+
+
+    def train(self, save_dir = os.path.join(MODEL_DIR, "PortfolioManagement"), MAX_EPISODES = 2000, \
+                DQNModel = None, hiddenUnits = [32],  batchNormalization = True, \
+                dropout_rate = 0.25, optimizer_learning_rate = 1e-4, clipvalue = 100):
+
+        Logger.info("Training with DQN agent ")
+
+        networkArgs = {"Model": DQNModel, "hiddenUnits": hiddenUnits, "batchNormalization": batchNormalization, \
+                        "dropout_rate" : dropout_rate, "optimizer_learning_rate": optimizer_learning_rate, "clipvalue": clipvalue}
+
+
+        self.agent = DQNAgent.DQN(envName = self.envName, save_dir = save_dir, \
+                                    networkArgs = networkArgs,  **self.envargs)
+
+        self.agent.train(discount_factor=0.99, MAX_EPISODES = MAX_EPISODES, batch_size = 32)
+
 
 
 

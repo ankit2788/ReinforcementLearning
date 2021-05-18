@@ -786,7 +786,7 @@ class WorkerAgent_Multi(threading.Thread):
 
 
         # once the agent has exhausted all runs
-        progress_bar.close()
+        self.globalProgressBar.close()
         self.result_queue.put(None)
 
 
