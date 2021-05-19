@@ -63,7 +63,7 @@ def epsilon_exploration(nbFrames):
 class DQN():
 
     def __init__(self, envName, save_dir,  \
-                    networkArgs :{"Model": None, "hiddenUnits": [32], \
+                    networkArgs  = {"Model": None, "hiddenUnits": [32], \
                         "batchNormalization": True, "dropout_rate" : 0.25, "optimizer_learning_rate": 1e-4, "clipvalue": 100},
                         **env_args):
 
