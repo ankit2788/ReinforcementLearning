@@ -240,7 +240,7 @@ class WorkerAgent(threading.Thread):
                                                     actorHiddenUnits = actorHiddenUnits, criticHiddenUnits = criticHiddenUnits) 
                                     
         else:
-            localModel = localModel
+            localModel = ActorCriticModel
 
         self.localModel = localModel
         Logger.info(f"Worker{workerIndex} created")

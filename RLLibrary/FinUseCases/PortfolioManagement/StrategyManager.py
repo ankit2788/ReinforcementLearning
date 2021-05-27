@@ -17,6 +17,8 @@ from abc import ABC, abstractclassmethod
 
 
 from RLLibrary.FinUseCases import CustomGym
+from RLLibrary.FinUseCases import EnvironmentStorage
+
 from RLLibrary.FinUseCases.PortfolioManagement.ModelManager.A3C import Agent as A3CAgent
 from RLLibrary.FinUseCases.PortfolioManagement.ModelManager.DQN import Agent as DQNAgent
 
@@ -33,30 +35,30 @@ from RLLibrary.utils.loggingConfig import logger
 Logger = logger.getLogger("StrategyManager")
 
 
-# ------register PortfolioManagement environment onto Custom gym
+# # ------register PortfolioManagement environment onto Custom gym
 
-CustomGym.register(
-    id = "PortfolioManagement-v0",
-    entry_point = 'FinUseCases.PortfolioManagement.EnvironmentManager:Portfolio',
-    kwargs = {"assets" : ["APA", "BMY"], "initialWeight" : [0.5, 0.5], \
-                    "nhistoricalDays" : 30, \
-                    "startDate" : "2019-01-01", "endDate" : "2019-12-31", \
-                    "actions" : [(-0.1,0.1)], \
-                    "assetDataPath" : os.path.join(DATA_DIR, "PortfolioManagement"), \
-                    "config" : {"initialCash": 1000000, "minCash": 0.02, "transactionFee": 0.0001}, 
-                    "penalizeFactors" : {"Risk": -0.08, "ForbiddenAction": -8}})
+# CustomGym.register(
+#     id = "PortfolioManagement-v0",
+#     entry_point = 'FinUseCases.PortfolioManagement.EnvironmentManager:Portfolio',
+#     kwargs = {"assets" : ["APA", "BMY"], "initialWeight" : [0.5, 0.5], \
+#                     "nhistoricalDays" : 30, \
+#                     "startDate" : "2019-01-01", "endDate" : "2019-12-31", \
+#                     "actions" : [(-0.1,0.1)], \
+#                     "assetDataPath" : os.path.join(DATA_DIR, "PortfolioManagement"), \
+#                     "config" : {"initialCash": 1000000, "minCash": 0.02, "transactionFee": 0.0001}, 
+#                     "penalizeFactors" : {"Risk": -0.08, "ForbiddenAction": -8}})
 
 
-CustomGym.register(
-    id = "PortfolioManagement_CNN-v0",
-    entry_point = 'FinUseCases.PortfolioManagement.EnvironmentManager:Portfolio_MultiStage',
-    kwargs = {"assets" : ["APA", "BMY"], "initialWeight" : [0.5, 0.5], \
-                    "nhistoricalDays" : 30, \
-                    "startDate" : "2019-01-01", "endDate" : "2019-12-31", \
-                    "actions" : [(-0.1,0.1)], \
-                    "assetDataPath" : os.path.join(DATA_DIR, "PortfolioManagement"), \
-                    "config" : {"initialCash": 1000000, "minCash": 0.02, "transactionFee": 0.0001}, 
-                    "penalizeFactors" : {"Risk": -0.08, "ForbiddenAction": -8}})
+# CustomGym.register(
+#     id = "PortfolioManagement_CNN-v0",
+#     entry_point = 'FinUseCases.PortfolioManagement.EnvironmentManager:Portfolio_MultiStage',
+#     kwargs = {"assets" : ["APA", "BMY"], "initialWeight" : [0.5, 0.5], \
+#                     "nhistoricalDays" : 30, \
+#                     "startDate" : "2019-01-01", "endDate" : "2019-12-31", \
+#                     "actions" : [(-0.1,0.1)], \
+#                     "assetDataPath" : os.path.join(DATA_DIR, "PortfolioManagement"), \
+#                     "config" : {"initialCash": 1000000, "minCash": 0.02, "transactionFee": 0.0001}, 
+#                     "penalizeFactors" : {"Risk": -0.08, "ForbiddenAction": -8}})
 
 
 
