@@ -1,8 +1,11 @@
 import os, sys
 from importlib import reload
+import numpy as np
+from tensorflow.python.training.tracking.tracking import ResourceTracker
 
 # Load the environments
 from RLLibrary.FinUseCases import CustomGym, EnvironmentStorage
+import tensorflow as tf
 
 
 from RLLibrary.utils import constants as constants
@@ -10,6 +13,11 @@ from RLLibrary.FinUseCases.OrderExecution import EnvironmentManager
 from RLLibrary.FinUseCases.OrderExecution.ModelManager.DQN import Agent as DQNAgent
 from RLLibrary.FinUseCases.OrderExecution.ModelManager.A3C import Agent as A3CAgent
 
+from RLLibrary.FinUseCases.OrderExecution.ModelManager.DQN import NetworkManager as DQNNet
+from RLLibrary.FinUseCases.OrderExecution.ModelManager.A3C import NetworkManager as A3CNet
+
+
+reload(EnvironmentManager)
 reload(DQNAgent)
 reload(A3CAgent)
 
@@ -22,6 +30,64 @@ Logger = logger.getLogger("ExecutionAlgos")
 
 
 print(CustomGym.registry.all())
+
+class Execution_EquiBalanced():
+
+    def __init__(self, envName = "OrderExecution-v0", **env_args):
+
+        self.envName = envName
+        self.envargs = env_args
+
+
+    def run(self, inidividualOrderSize = 1, orderConfig = {"initialOrderSize": 10000, "initialTimeHorizon": 100, "orderFactor": 100, \
+                                "TotalIntervals": 50, "startTime": "09:30", "Timezone": "IST"}, 
+                testDate = "20200131"):
+
+        # load teh environment
+        self.envargs["orderConfig"] = orderConfig
+        self.envargs["testDate"] = testDate
+        self.envargs["trainingYear"] = []
+
+        self.env = CustomGym.make(self.envName, **self.envargs)
+
+        # run the environment
+        self.env.reset(resetDate = testDate)
+        done = False
+        episodic_reward = 0
+        episodic_steps = 0
+
+        while not done:
+
+            if episodic_steps % self.env.TimeGapbetweenIntervals == 0:
+                # take model defined action 
+                action = inidividualOrderSize      # lot to execute
+
+            else :
+                action = 0
+                
+            
+            if self.env.currentInfo.TimeLeft == 1:
+                # if only 1 minute left, execute all remaining orders
+
+                action = self.env.currentInfo.AvailableInventory/ self.env.orderSizeFactor
+
+
+            next_state, reward, done, _ = self.env.step(action)
+
+
+            episodic_reward += reward
+            episodic_steps += 1
+
+        print(f'Total episodic reward using DQN: {episodic_reward}. Steps taken: {episodic_steps}')
+        invHistory = self.env.getInventoryHistory()
+
+        effectiveExecutedPrice = np.sum(invHistory["ExecutedInventory"]*invHistory["ExecutedPrice"])/np.sum(invHistory["ExecutedInventory"])
+        return invHistory , np.round(effectiveExecutedPrice, 3),    episodic_reward,   episodic_steps
+
+
+    def plotPerformance(self):
+        self.env.render()
+
 
 
 class Execution_DQN():
@@ -50,6 +116,78 @@ class Execution_DQN():
 
 
 
+    def run(self, modelWeights, hiddenUnits = [32], batchNormalization = True, dropoutRate = 0.25, \
+                orderConfig = {"initialOrderSize": 10000, "initialTimeHorizon": 100, "orderFactor": 100, \
+                                "TotalIntervals": 50, "startTime": "09:30", "Timezone": "IST"}, 
+                testDate = "20200131"):
+
+        # load teh environment
+        self.envargs["orderConfig"] = orderConfig
+        self.envargs["testDate"] = testDate
+        self.envargs["trainingYear"] = []
+
+        self.env = CustomGym.make(self.envName, **self.envargs)
+
+        model = DQNNet.NN_FF(state_size=self.env.observation_space.n, action_size=len(self.env.action_space.actions), \
+                            hiddenUnits=hiddenUnits, batchNormalization=batchNormalization, dropout_rate=dropoutRate)
+
+        
+        # compile the model
+        model(tf.convert_to_tensor(np.array(self.env.observation_space.currentState)[None, :], dtype = tf.float32))
+
+        # load the weights
+        model.load_weights(modelWeights)
+
+        # run the environment
+        self.env.reset(resetDate = testDate)
+        done = False
+        currentState = self.env.observation_space.currentState
+        episodic_reward = 0
+        episodic_steps = 0
+
+
+        while not done:
+
+            currentState = np.array(currentState).reshape(1, self.env.observation_space.n)
+        
+            laststep = False
+            if episodic_steps % self.env.TimeGapbetweenIntervals == 0:
+                # take model defined action 
+                actionValues = model(currentState)
+                actionIndex = np.argmax(actionValues[0])        # greeedy action
+                action = self.env.action_space.actions[actionIndex]
+
+            else :
+                actionIndex = 0                     # no order to be executed
+                action = 0
+                
+            
+            if self.env.currentInfo.TimeLeft == 1:
+                # if only 1 minute left, execute all remaining orders
+
+                action = self.env.currentInfo.AvailableInventory/ self.env.orderSizeFactor
+                actionIndex = action            # in this case, action and actionIndex are same
+
+
+            next_state, reward, done, _ = self.env.step(action)
+
+
+            episodic_reward += reward
+            episodic_steps += 1
+            currentState = next_state
+
+        print(f'Total episodic reward using DQN: {episodic_reward}. Steps taken: {episodic_steps}')
+        invHistory = self.env.getInventoryHistory()
+
+        effectiveExecutedPrice = np.sum(invHistory["ExecutedInventory"]*invHistory["ExecutedPrice"])/np.sum(invHistory["ExecutedInventory"])
+        return invHistory , np.round(effectiveExecutedPrice, 3),    episodic_reward,   episodic_steps
+
+
+    def plotPerformance(self):
+        self.env.render()
+
+
+
 class Execution_DDQN():
 
     def __init__(self, envName = "OrderExecution-v0", **env_args):
@@ -75,22 +213,72 @@ class Execution_DDQN():
         self.agent.train(discount_factor=0.99, MAX_EPISODES = MAX_EPISODES, batch_size = 32)
 
 
+    def run(self, modelWeights, hiddenUnits = [32], batchNormalization = True, dropoutRate = 0.25, \
+                orderConfig = {"initialOrderSize": 10000, "initialTimeHorizon": 100, "orderFactor": 100, \
+                                "TotalIntervals": 50, "startTime": "09:30", "Timezone": "IST"}, 
+                testDate = "20200131"):
+
+        # load teh environment
+        self.envargs["orderConfig"] = orderConfig
+        self.envargs["testDate"] = testDate
+        self.envargs["trainingYear"] = []
+
+        self.env = CustomGym.make(self.envName, **self.envargs)
+
+        model = DQNNet.NN_FF(state_size=self.env.observation_space.n, action_size=len(self.env.action_space.actions), \
+                            hiddenUnits=hiddenUnits, batchNormalization=batchNormalization, dropout_rate=dropoutRate)
+
+        
+        # compile the model
+        model(tf.convert_to_tensor(np.array(self.env.observation_space.currentState)[None, :], dtype = tf.float32))
+
+        # load the weights
+        model.load_weights(modelWeights)
+
+        # run the environment
+        self.env.reset(resetDate = testDate)
+        done = False
+        currentState = self.env.observation_space.currentState
+        episodic_reward = 0
+        episodic_steps = 0
 
 
+        while not done:
 
-    # def run(self):
+            currentState = np.array(currentState).reshape(1, self.env.observation_space.n)
+        
+            laststep = False
+            if episodic_steps % self.env.TimeGapbetweenIntervals == 0:
+                # take model defined action 
+                actionValues = model(currentState)
+                actionIndex = np.argmax(actionValues[0])        # greeedy action
+                action = self.env.action_space.actions[actionIndex]
 
-    #     Logger.info("Learning")
+            else :
+                actionIndex = 0                     # no order to be executed
+                action = 0
+                
+            
+            if self.env.currentInfo.TimeLeft == 1:
+                # if only 1 minute left, execute all remaining orders
 
-    #     currentState = self.env.reset()
-    #     episodeOver = False
-    #     while not episodeOver:
-    #         action = list(self.actions[0])
-    #         newstate, reward, episodeOver = self.env.step(action)
-    #         currentState = newstate
+                action = self.env.currentInfo.AvailableInventory/ self.env.orderSizeFactor
+                actionIndex = action            # in this case, action and actionIndex are same
 
-    #     portHistory = self.env.getPortfolioHistory() 
-    #     return portHistory
+
+            next_state, reward, done, _ = self.env.step(action)
+
+            episodic_reward += reward
+            episodic_steps += 1
+            currentState = next_state
+
+        print(f'Total episodic reward using DDQN: {episodic_reward}. Steps taken: {episodic_steps}')
+        invHistory = self.env.getInventoryHistory()
+        
+        effectiveExecutedPrice = np.sum(invHistory["ExecutedInventory"]*invHistory["ExecutedPrice"])/np.sum(invHistory["ExecutedInventory"])
+        return invHistory , np.round(effectiveExecutedPrice, 3),    episodic_reward,   episodic_steps
+
+
 
 
     def plotPerformance(self):
@@ -124,21 +312,78 @@ class Execution_A3C():
         self.masterAgent.train()
 
 
+    def run(self, modelWeights, actorHiddenUnits = [32], criticHiddenUnits = [32], \
+                orderConfig = {"initialOrderSize": 10000, "initialTimeHorizon": 100, "orderFactor": 100, \
+                                "TotalIntervals": 50, "startTime": "09:30", "Timezone": "IST"}, 
+                testDate = "2020-01-31"):
+
+        # load teh environment
+        self.envargs["orderConfig"] = orderConfig
+        self.envargs["testDate"] = testDate
+        self.envargs["trainingYear"] = []
+
+        self.env = CustomGym.make(self.envName, **self.envargs)
+
+        model = A3CNet.ActorCritic_FF(state_size=self.env.observation_space.n, action_size=len(self.env.action_space.actions), \
+                        actorHiddenUnits=actorHiddenUnits, criticHiddenUnits= criticHiddenUnits)
+
+        
+        # compile the model
+        model(tf.convert_to_tensor(np.array(self.env.observation_space.currentState)[None, :], dtype = tf.float32))
+
+        # load the weights
+        model.load_weights(modelWeights)
+
+        # run the environment
+        self.env.reset(resetDate = testDate)
+        done = False
+        currentState = np.array(self.env.observation_space.currentState)
+        episodic_reward = 0  
+        episodic_steps = 0      
 
 
-    # def run(self):
 
-    #     Logger.info("Learning")
+        while not done:
 
-    #     currentState = self.env.reset()
-    #     episodeOver = False
-    #     while not episodeOver:
-    #         action = list(self.actions[0])
-    #         newstate, reward, episodeOver = self.env.step(action)
-    #         currentState = newstate
+            currentState = np.array(currentState).reshape(1, self.env.observation_space.n)
+        
+            laststep = False
+            if episodic_steps % self.env.TimeGapbetweenIntervals == 0:
 
-    #     portHistory = self.env.getPortfolioHistory() 
-    #     return portHistory
+                # get action probability
+                currentState = np.array(currentState)
+                probs, _ = model(tf.convert_to_tensor(currentState[None, :], dtype = tf.float32))
+                _probs = np.nan_to_num(probs.numpy()[0])
+
+                # choose the action with max prob
+                actionIndex = np.argmax(_probs)
+                action = self.env.action_space.actions[actionIndex]
+
+            else :
+                actionIndex = 0                     # no order to be executed
+                action = 0
+                
+            
+            if self.env.currentInfo.TimeLeft == 1:
+                # if only 1 minute left, execute all remaining orders
+
+                action = self.env.currentInfo.AvailableInventory/ self.env.orderSizeFactor
+                actionIndex = action            # in this case, action and actionIndex are same
+
+
+            next_state, reward, done, _ = self.env.step(action)
+
+            episodic_reward += reward
+            episodic_steps += 1
+            currentState = next_state
+
+        print(f'Total episodic reward using A3C: {episodic_reward}. Steps taken: {episodic_steps}')
+        invHistory = self.env.getInventoryHistory()
+
+        effectiveExecutedPrice = np.sum(invHistory["ExecutedInventory"]*invHistory["ExecutedPrice"])/np.sum(invHistory["ExecutedInventory"])
+        return invHistory , np.round(effectiveExecutedPrice, 3),    episodic_reward,   episodic_steps
+
+
 
 
     def plotPerformance(self):

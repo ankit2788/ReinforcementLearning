@@ -86,6 +86,8 @@ class OrderExecution(Environment):
 
 
         self.trainingYears  = trainingYear
+        self.testDate = testDate
+        print(self.testDate)
 
         
         # initial values
@@ -111,7 +113,7 @@ class OrderExecution(Environment):
                                                     StepRewardFactor=penalizeFactors["StepReward"])
         
         # reset the portfolio environment and update the portfolio history
-        self.reset()       
+        self.reset(resetDate = testDate)       
 
 
                  
@@ -126,6 +128,7 @@ class OrderExecution(Environment):
             # This is training mode
             # randomly select a date from the available data
 
+            print("I am here")
             allDates = []
             for year in self.trainingYears:
                 allDates += list(self.DataManager.dates[year])
@@ -313,8 +316,20 @@ class OrderExecution(Environment):
     def render(self):
         # renders the current state of environment
         invHistory = self.getInventoryHistory()
-        plt.figure(figsize = (10,6))
-        plt.plot(invHistory["Time"], invHistory["AvailableInventory"])
+
+        fig, ax = plt.subplots(1,1, figsize = (10,6))
+        ax2 = ax.twinx()
+
+        ax.plot(invHistory["Time"], invHistory["AvailableInventory"], color = "green")
+        ax2.plot(invHistory["Time"], invHistory["ExecutedPrice"], color = "black")
+        ax.xaxis.set_major_locator(plt.MaxNLocator(5))
+
+        ax.set_xlabel('Time')
+        ax.set_ylabel('Inventory left', color='green')
+        ax2.set_ylabel('Price', color='black')
+
+
+
 
 
     def _performExecution(self, action, updateCurrentInfo = True):
