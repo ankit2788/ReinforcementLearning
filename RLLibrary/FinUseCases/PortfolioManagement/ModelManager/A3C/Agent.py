@@ -240,7 +240,7 @@ class WorkerAgent(threading.Thread):
                                                     actorHiddenUnits = actorHiddenUnits, criticHiddenUnits = criticHiddenUnits) 
                                     
         else:
-            localModel = localModel
+            localModel = ActorCriticModel
 
         self.localModel = localModel
         Logger.info(f"Worker{workerIndex} created")
@@ -786,7 +786,7 @@ class WorkerAgent_Multi(threading.Thread):
 
 
         # once the agent has exhausted all runs
-        progress_bar.close()
+        self.globalProgressBar.close()
         self.result_queue.put(None)
 
 
